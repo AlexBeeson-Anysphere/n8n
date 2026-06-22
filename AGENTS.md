@@ -265,3 +265,38 @@ titles, test descriptions, and Linear URLs.
   description using `https://linear.app/n8n/issue/[TICKET-ID]`. Do not
   create a Linear ticket on your own — ask first.
 - always link to the github issue if mentioned in the linear ticket.
+
+## Cursor Cloud specific instructions
+
+These notes are for agents running in the Cursor Cloud VM. Standard commands
+live above and in `CONTRIBUTING.md`; only non-obvious caveats are repeated here.
+
+### Network requirement (install blocker)
+- `pnpm install` fetches `xlsx@0.20.2` from `https://cdn.sheetjs.com` (SheetJS
+  no longer publishes to npm; npm only has `0.18.5`). This host **must be
+  allowlisted** in the Cloud Agent Network Access settings, otherwise install
+  fails (TLS reset) before any workspace package is linked — `pnpm install`
+  resolves/fetches everything before linking, so this one dependency blocks the
+  whole install. There is no clean way around it that doesn't downgrade `xlsx`.
+- Outbound telemetry to `ph.n8n.io` (PostHog) is also blocked; this is harmless
+  noise in the backend log and can be ignored.
+
+### Node version
+- n8n requires Node `>=22.22` (`package.json` engines). The VM's default `node`
+  may be older; nvm has `22.22.2` installed and interactive login shells are
+  configured to prefer it (`~/.bashrc`). If a non-login shell uses an older
+  node, run `export PATH="$HOME/.nvm/versions/node/v22.22.2/bin:$PATH"`.
+
+### Running the app (dev mode)
+- One-time on a fresh checkout: `pnpm install` then `pnpm build` (see
+  `CONTRIBUTING.md`). SQLite is the default DB (auto-created at `~/.n8n`); no
+  Postgres/Redis needed for the common case.
+- **Avoid root `pnpm dev` here:** it is not filtered, so it also starts
+  `n8n-playwright:dev`, which runs the **full Playwright E2E suite** with
+  `RESET_E2E_DB=true` — very noisy and resource-heavy. Prefer the split dev
+  setup instead:
+  - Backend: `cd packages/cli && pnpm dev` → API/editor host on `:5678`
+  - Frontend: `cd packages/frontend/editor-ui && pnpm dev` → Vite editor on `:8080`
+- Open the editor at `http://localhost:8080` (it proxies the API at `:5678`).
+  First launch prompts to create an owner account, then you reach the canvas.
+- Backend liveness check: `curl http://localhost:5678/healthz` → `{"status":"ok"}`.
