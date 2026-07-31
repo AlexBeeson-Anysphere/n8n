@@ -265,3 +265,36 @@ titles, test descriptions, and Linear URLs.
   description using `https://linear.app/n8n/issue/[TICKET-ID]`. Do not
   create a Linear ticket on your own — ask first.
 - always link to the github issue if mentioned in the linear ticket.
+
+## Cursor Cloud specific instructions
+
+These notes cover non-obvious caveats for running this repo in the Cursor Cloud
+VM. Standard install/build/lint/test/run commands are documented above — use
+those; this section only records gotchas.
+
+### Node version
+- The VM's default `node` on `PATH` (`/exec-daemon/node`) is 22.14, which is
+  below the repo requirement (`engines.node >= 22.22`). nvm has `22.22.2`
+  installed, and `node`/`npm`/`npx` symlinks in `/usr/local/cargo/bin` (first on
+  `PATH`) point at it so the correct version wins in every shell. This is a
+  one-time setup persisted in the VM snapshot, not part of the update script.
+- If `node --version` ever reports `22.14`, recreate the symlink:
+  `ln -sf "$(nvm which 22.22.2)" /usr/local/cargo/bin/node` (after
+  `source ~/.nvm/nvm.sh`).
+
+### Network requirement (install)
+- `xlsx` is pinned in the lockfile to `https://cdn.sheetjs.com/xlsx-0.20.2/xlsx-0.20.2.tgz`.
+  SheetJS is not on the npm registry (npm caps at `0.18.5`), so
+  `cdn.sheetjs.com` must be allowlisted in the Cloud Agent network settings for
+  `pnpm install --frozen-lockfile` to succeed. Once fetched, the tarball is
+  cached in the pnpm store. If the host is blocked, install fails only on this
+  single tarball; every other dependency resolves from the npm registry.
+
+### Running n8n in dev
+- Default dev config uses SQLite + in-process (`regular`) execution and an
+  in-process task runner — no external Postgres/Redis needed. Just `pnpm dev`,
+  then open http://localhost:5678. First load shows the owner-account setup
+  screen.
+- In dev, PostHog/telemetry log lines like `fetch failed` / `ECONNRESET` are
+  harmless outbound-analytics failures (blocked egress), not startup errors —
+  the server is still `ready on ... port 5678`.
