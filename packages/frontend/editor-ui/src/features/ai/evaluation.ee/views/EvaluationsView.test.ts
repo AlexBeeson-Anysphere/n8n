@@ -68,7 +68,8 @@ describe('EvaluationsView', () => {
 
 			const { getByTestId } = renderComponent();
 			await waitFor(() => expect(getByTestId('past-runs-table')).toBeInTheDocument());
-			// expect(getByTestId('past-runs-table')).toBeInTheDocument();
+			expect(getByTestId('run-compare-bar')).toBeInTheDocument();
+			expect(getByTestId('compare-runs-button')).toBeDisabled();
 		});
 
 		it('should start a test run when run test button is clicked', async () => {
