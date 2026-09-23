@@ -51,6 +51,7 @@ const nodeType = computed(() => nodeTypesStore.getNodeType(node.type, node.typeV
 		<N8nIconButton
 			variant="ghost"
 			v-if="parameter"
+			data-test-id="focus-parameter-close"
 			icon="x"
 			size="small"
 			@click="emit('clearParameter')"

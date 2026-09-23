@@ -1,3 +1,4 @@
+import { fireEvent } from '@testing-library/vue';
 import { createCanvasGraphNode } from '@/features/workflows/canvas/__tests__/utils';
 import { createTestNode, mockNodeTypeDescription } from '@/__tests__/mocks';
 import { createComponentRenderer } from '@/__tests__/render';
@@ -67,7 +68,12 @@ describe('FocusPanel', () => {
 	let workflowDocumentStore: ReturnType<typeof useWorkflowDocumentStore>;
 
 	const testNodes = [
-		createTestNode({ id: 'n0', name: 'N0', parameters: { p0: 'v0' }, type: SET_NODE_TYPE }),
+		createTestNode({
+			id: 'n0',
+			name: 'N0',
+			parameters: { p0: 'v0', p1: 'v1' },
+			type: SET_NODE_TYPE,
+		}),
 	];
 
 	beforeEach(() => {
@@ -152,6 +158,103 @@ describe('FocusPanel', () => {
 			expect(rendered.getByText('N0')).toBeInTheDocument(); // title in header
 			expect(rendered.getByText('P0')).toBeInTheDocument(); // title in header
 			expect(rendered.getByDisplayValue('v0')).toBeInTheDocument(); // current value of the parameter
+		});
+
+		it('should hide parameter tabs when a single parameter is focused', async () => {
+			const rendered = renderComponent({});
+
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter0,
+				parameterPath: 'parameters.p0',
+			});
+
+			expect(await rendered.findByTestId('focus-parameter')).toBeInTheDocument();
+			expect(rendered.queryByTestId('focus-parameter-tabs')).not.toBeInTheDocument();
+		});
+
+		it('should switch the focused parameter when a tab is selected', async () => {
+			const rendered = renderComponent({});
+
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter0,
+				parameterPath: 'parameters.p0',
+			});
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter1,
+				parameterPath: 'parameters.p1',
+			});
+
+			const tabs = await rendered.findByTestId('focus-parameter-tabs');
+			expect(tabs).toHaveAccessibleName('Focused parameters');
+			expect(rendered.getByDisplayValue('v1')).toBeInTheDocument();
+
+			await fireEvent.click(rendered.getByText('P0'));
+
+			expect(rendered.getByDisplayValue('v0')).toBeInTheDocument();
+			expect(rendered.queryByDisplayValue('v1')).not.toBeInTheDocument();
+		});
+
+		it('should remove only the active parameter when the header close button is used', async () => {
+			const rendered = renderComponent({});
+
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter0,
+				parameterPath: 'parameters.p0',
+			});
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter1,
+				parameterPath: 'parameters.p1',
+			});
+
+			await rendered.findByTestId('focus-parameter-tabs');
+			await fireEvent.click(rendered.getByTestId('focus-parameter-close'));
+
+			expect(rendered.queryByTestId('focus-parameter-tabs')).not.toBeInTheDocument();
+			expect(rendered.getByDisplayValue('v0')).toBeInTheDocument();
+			expect(rendered.queryByDisplayValue('v1')).not.toBeInTheDocument();
+		});
+
+		it('should include the node name when focused parameters share a display name', async () => {
+			const sharedName: INodeProperties = {
+				...parameter0,
+				displayName: 'Value',
+			};
+			workflowDocumentStore.setNodes([
+				createTestNode({
+					id: 'n0',
+					name: 'N0',
+					parameters: { p0: 'v0' },
+					type: SET_NODE_TYPE,
+				}),
+				createTestNode({
+					id: 'n1',
+					name: 'N1',
+					parameters: { p0: 'v1' },
+					type: SET_NODE_TYPE,
+				}),
+			]);
+
+			const rendered = renderComponent({});
+
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: sharedName,
+				parameterPath: 'parameters.p0',
+			});
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n1',
+				parameter: sharedName,
+				parameterPath: 'parameters.p0',
+			});
+
+			const tabs = await rendered.findByTestId('focus-parameter-tabs');
+			expect(tabs).toHaveTextContent('Value (N0)');
+			expect(tabs).toHaveTextContent('Value (N1)');
 		});
 	});
 });
