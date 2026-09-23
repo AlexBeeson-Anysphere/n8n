@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": ".cursor/hooks/require-pnpm.py",
+        "matcher": "(?<!p)npm\\b|\\byarn\\b"
+      },
+      {
+        "command": ".cursor/hooks/redirect-build.py",
+        "matcher": "\\b(?:pnpm|turbo)\\b"
+      }
+    ]
+  }
+}

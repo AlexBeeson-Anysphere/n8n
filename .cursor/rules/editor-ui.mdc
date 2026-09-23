@@ -1,0 +1,30 @@
+---
+description: Editor UI copy, styling, and component conventions
+globs: packages/frontend/**/*.{vue,scss,css}
+alwaysApply: false
+---
+
+# Editor UI
+
+- Vue 3 `<script setup lang="ts">`. Props and emits are typed.
+- User-visible copy goes through `useI18n().baseText('key')`. Add the English string in `packages/frontend/@n8n/i18n/src/locales/en.json`.
+- `data-testid` is one value, with no spaces.
+- Style with semantic tokens from `@n8n/design-system/src/css/_tokens.scss` or `_primitives.scss`. Do not use `_tokens.legacy.scss` or raw px spacing.
+- Reuse `@n8n/design-system` components. Icon names come from `updatedIconSet` in `packages/frontend/@n8n/design-system/src/components/N8nIcon/icons.ts`.
+- Debounce with `getDebounceTime` from `@/app/constants`, not a magic number.
+- Inside `N8nDialog`, keep Element Plus popovers in the dialog stack with `:teleported="false"` unless they must escape it.
+
+```vue
+<script setup lang="ts">
+import { useI18n } from '@n8n/i18n';
+
+defineProps<{ titleKey: string }>();
+const i18n = useI18n();
+</script>
+
+<template>
+  <span data-testid="workflow-title">{{ i18n.baseText(titleKey) }}</span>
+</template>
+```
+
+Read `packages/frontend/AGENTS.md` and the design-system skill before changing layout or visual design.

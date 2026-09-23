@@ -1,0 +1,24 @@
+---
+description: nodes-base and LangChain node execution, errors, and tests
+globs: packages/nodes-base/**/*.ts,packages/@n8n/nodes-langchain/**/*.ts
+alwaysApply: false
+---
+
+# Node implementation
+
+- Implement `INodeType`. Prefer declarative routing (`requestDefaults`) when the node is HTTP mapping; use `execute` for custom logic.
+- Version with `version: [1, 1.1]` or a `VersionedNodeType` class. Follow the existing node's versioning style.
+- Throw `NodeOperationError` for user-facing failures and `NodeApiError` for upstream API failures. Honor `continueOnFail` when the node already does.
+- No `any`. Prefer type guards over `as` outside tests.
+- Values from `this.getNodeParameter(...)` and `item.json` are untrusted. Do not use them as computed keys on assignment. Write through `setSafeObjectProperty` / `isSafeObjectProperty` from `n8n-workflow`, or use a `Map` / `Object.create(null)`.
+
+```ts
+import { isSafeObjectProperty, setSafeObjectProperty } from 'n8n-workflow';
+
+if (isSafeObjectProperty(table) && acc[table] === undefined) {
+  setSafeObjectProperty(acc, table, {});
+}
+```
+
+- Tests live next to the node. Mock HTTP with `nock`. Run `pnpm test <file>` from `packages/nodes-base`.
+- Read `packages/nodes-base/AGENTS.md` before adding a node, trigger, or credential.
