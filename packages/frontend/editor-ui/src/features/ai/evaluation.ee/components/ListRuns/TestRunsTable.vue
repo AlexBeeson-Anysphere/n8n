@@ -9,14 +9,26 @@ import { statusDictionary, getErrorBaseKey } from '../../evaluation.constants';
 import { I18nT } from 'vue-i18n';
 import { N8nHeading, N8nIcon, N8nText, N8nTooltip } from '@n8n/design-system';
 import AnimatedSpinner from '@/app/components/AnimatedSpinner.vue';
+
+type IndexedRun = TestRunRecord & { index: number };
+
 const emit = defineEmits<{
-	rowClick: [run: TestRunRecord & { index: number }];
+	rowClick: [run: IndexedRun];
+	selectionChange: [runs: IndexedRun[]];
 }>();
 
-const props = defineProps<{
-	runs: Array<TestRunRecord & { index: number }>;
-	columns: Array<TestTableColumn<TestRunRecord & { index: number }>>;
-}>();
+const props = withDefaults(
+	defineProps<{
+		runs: IndexedRun[];
+		columns: Array<TestTableColumn<IndexedRun>>;
+		selectable?: boolean;
+		selectableFilter?: (row: IndexedRun) => boolean;
+	}>(),
+	{
+		selectable: false,
+		selectableFilter: () => true,
+	},
+);
 
 const locale = useI18n();
 const styledColumns = computed(() => {
@@ -66,7 +78,10 @@ const runSummaries = computed(() => {
 			:data="runSummaries"
 			:columns="styledColumns"
 			:default-sort="{ prop: 'runAt', order: 'descending' }"
+			:selectable="selectable"
+			:selectable-filter="selectableFilter"
 			@row-click="(row) => (row.status !== 'error' ? emit('rowClick', row) : undefined)"
+			@selection-change="(rows) => emit('selectionChange', rows)"
 		>
 			<template #id="{ row }">#{{ row.index }} </template>
 			<template #status="{ row }">
