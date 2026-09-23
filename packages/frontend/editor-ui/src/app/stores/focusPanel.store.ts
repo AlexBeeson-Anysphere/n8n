@@ -37,8 +37,14 @@ export type RichFocusedNodeParameter = FocusedNodeParameter & {
 type FocusPanelData = {
 	isActive: boolean;
 	parameters: FocusedNodeParameter[];
+	/** `${nodeId}:${parameterPath}` of the parameter shown in the panel. */
+	activeParameterKey?: string;
 	width?: number;
 };
+
+export function getFocusedParameterKey(nodeId: string, parameterPath: string): string {
+	return `${nodeId}:${parameterPath}`;
+}
 
 type FocusPanelDataByWid = Record<string, FocusPanelData>;
 
@@ -96,11 +102,21 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 			}),
 	);
 
-	const resolvedParameter = computed(() =>
-		focusedNodeParameters.value[0] && isRichParameter(focusedNodeParameters.value[0])
-			? focusedNodeParameters.value[0]
-			: undefined,
-	);
+	const activeParameterKey = computed(() => currentFocusPanelData.value.activeParameterKey);
+
+	// Prefer the stored selection. A missing or stale key falls back to the first
+	// parameter that still resolves to a node, so older storage keeps working.
+	const resolvedParameter = computed(() => {
+		const parameters = focusedNodeParameters.value;
+		const active = parameters.find(
+			(parameter) =>
+				getFocusedParameterKey(parameter.nodeId, parameter.parameterPath) ===
+					activeParameterKey.value && isRichParameter(parameter),
+		);
+		if (active && isRichParameter(active)) return active;
+
+		return parameters.find(isRichParameter);
+	});
 
 	function _setOptions({
 		parameters,
@@ -108,12 +124,15 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 		wid = workflowsStore.workflowId,
 		width = undefined,
 		removeEmpty = false,
+		activeParameterKey: nextActiveParameterKey,
 	}: {
 		isActive?: boolean;
 		parameters?: FocusedNodeParameter[];
 		wid?: string;
 		width?: number;
 		removeEmpty?: boolean;
+		/** `null` clears the selection. Omit to keep the key already stored for `wid`. */
+		activeParameterKey?: string | null;
 	}) {
 		const focusPanelDataCurrent = focusPanelData.value;
 
@@ -122,13 +141,24 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 			delete focusPanelDataCurrent[''];
 		}
 
+		const existingForWorkflow = focusPanelData.value[wid];
+		const resolvedActiveParameterKey =
+			nextActiveParameterKey === null
+				? undefined
+				: (nextActiveParameterKey ?? existingForWorkflow?.activeParameterKey);
+
+		const nextFocusPanelData: FocusPanelData = {
+			isActive: isActive ?? focusPanelActive.value,
+			parameters: parameters ?? _focusedNodeParameters.value,
+			width: width ?? focusPanelWidth.value,
+		};
+		if (resolvedActiveParameterKey) {
+			nextFocusPanelData.activeParameterKey = resolvedActiveParameterKey;
+		}
+
 		focusPanelStorage.value = JSON.stringify({
 			...focusPanelData.value,
-			[wid]: {
-				isActive: isActive ?? focusPanelActive.value,
-				parameters: parameters ?? _focusedNodeParameters.value,
-				width: width ?? focusPanelWidth.value,
-			},
+			[wid]: nextFocusPanelData,
 		});
 
 		if (isActive) {
@@ -149,16 +179,21 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 			wid,
 			parameters: latestWorkflowData.parameters,
 			isActive: latestWorkflowData.isActive,
+			activeParameterKey: latestWorkflowData.activeParameterKey ?? null,
 			removeEmpty: true,
 		});
 	}
 
 	function openWithFocusedNodeParameter(nodeParameter: FocusedNodeParameter) {
-		const parameters = [nodeParameter];
-		// TODO: uncomment when tabs are implemented
-		// ...focusedNodeParameters.value.filter((p) => p.parameterPath !== nodeParameter.parameterPath),
+		const key = getFocusedParameterKey(nodeParameter.nodeId, nodeParameter.parameterPath);
+		const parameters = [
+			nodeParameter,
+			..._focusedNodeParameters.value.filter(
+				(parameter) => getFocusedParameterKey(parameter.nodeId, parameter.parameterPath) !== key,
+			),
+		];
 
-		_setOptions({ parameters, isActive: true });
+		_setOptions({ parameters, isActive: true, activeParameterKey: key });
 	}
 
 	function openFocusPanel() {
@@ -170,7 +205,41 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 	}
 
 	function unsetParameters() {
-		_setOptions({ parameters: [] });
+		_setOptions({ parameters: [], activeParameterKey: null });
+	}
+
+	function setActiveParameter(key: string) {
+		const exists = _focusedNodeParameters.value.some(
+			(parameter) => getFocusedParameterKey(parameter.nodeId, parameter.parameterPath) === key,
+		);
+		if (!exists) return;
+
+		_setOptions({ activeParameterKey: key });
+	}
+
+	function removeFocusedNodeParameter(key: string) {
+		const remaining = _focusedNodeParameters.value.filter(
+			(parameter) => getFocusedParameterKey(parameter.nodeId, parameter.parameterPath) !== key,
+		);
+		if (remaining.length === _focusedNodeParameters.value.length) return;
+
+		if (remaining.length === 0) {
+			unsetParameters();
+			return;
+		}
+
+		const currentKey = activeParameterKey.value;
+		const nextKey =
+			currentKey &&
+			currentKey !== key &&
+			remaining.some(
+				(parameter) =>
+					getFocusedParameterKey(parameter.nodeId, parameter.parameterPath) === currentKey,
+			)
+				? currentKey
+				: getFocusedParameterKey(remaining[0].nodeId, remaining[0].parameterPath);
+
+		_setOptions({ parameters: remaining, activeParameterKey: nextKey });
 	}
 
 	function toggleFocusPanel() {
@@ -237,6 +306,7 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 		focusedNodeParametersInTelemetryFormat,
 		lastFocusTimestamp,
 		focusPanelWidth,
+		activeParameterKey,
 		resolvedParameter,
 		selectedTab,
 		openWithFocusedNodeParameter,
@@ -248,6 +318,8 @@ export const useFocusPanelStore = defineStore(STORES.FOCUS_PANEL, () => {
 		onNewWorkflowSave,
 		updateWidth,
 		unsetParameters,
+		setActiveParameter,
+		removeFocusedNodeParameter,
 		setSelectedTab,
 	};
 });

@@ -8,7 +8,7 @@ import JsonEditor from '@/features/shared/editors/components/JsonEditor/JsonEdit
 import NodeExecuteButton from '@/app/components/NodeExecuteButton.vue';
 import ParameterOptions from '@/features/ndv/parameters/components/ParameterOptions.vue';
 import SqlEditor from '@/features/shared/editors/components/SqlEditor/SqlEditor.vue';
-import { useFocusPanelStore } from '@/app/stores/focusPanel.store';
+import { getFocusedParameterKey, useFocusPanelStore } from '@/app/stores/focusPanel.store';
 import { useNodeTypesStore } from '@/app/stores/nodeTypes.store';
 import { computed, nextTick, ref, watch, toRef } from 'vue';
 import { useI18n } from '@n8n/i18n';
@@ -50,7 +50,15 @@ import { type CanvasNode, CanvasNodeRenderType } from '@/features/workflows/canv
 import { useCanvasOperations } from '@/app/composables/useCanvasOperations';
 import { useSetupPanelStore } from '@/features/setupPanel/setupPanel.store';
 
-import { N8nIcon, N8nInfoTip, N8nInput, N8nRadioButtons, N8nText } from '@n8n/design-system';
+import type { TabOptions } from '@n8n/design-system';
+import {
+	N8nIcon,
+	N8nInfoTip,
+	N8nInput,
+	N8nRadioButtons,
+	N8nTabs,
+	N8nText,
+} from '@n8n/design-system';
 import { useInjectWorkflowId } from '@/app/composables/useInjectWorkflowId';
 defineOptions({ name: 'FocusPanel' });
 
@@ -87,6 +95,40 @@ const vueFlow = useVueFlow(workflowId.value);
 const { renameNode } = useCanvasOperations();
 
 const resolvedParameter = computed(() => focusPanelStore.resolvedParameter);
+
+const showParameterTabs = computed(() => focusPanelStore.focusedNodeParameters.length > 1);
+
+const parameterTabs = computed<Array<TabOptions<string>>>(() => {
+	const parameters = focusPanelStore.focusedNodeParameters;
+	const displayNameCounts = new Map<string, number>();
+	for (const parameter of parameters) {
+		const displayName = parameter.parameter.displayName;
+		displayNameCounts.set(displayName, (displayNameCounts.get(displayName) ?? 0) + 1);
+	}
+
+	return parameters.map((parameter) => {
+		const displayName = parameter.parameter.displayName;
+		const sharedDisplayName = (displayNameCounts.get(displayName) ?? 0) > 1;
+		const nodeName = focusPanelStore.isRichParameter(parameter) ? parameter.node.name : undefined;
+
+		return {
+			label: sharedDisplayName && nodeName ? `${displayName} (${nodeName})` : displayName,
+			value: getFocusedParameterKey(parameter.nodeId, parameter.parameterPath),
+		};
+	});
+});
+
+const activeParameterTab = computed(() => {
+	const resolved = resolvedParameter.value;
+	if (resolved) return getFocusedParameterKey(resolved.nodeId, resolved.parameterPath);
+
+	return parameterTabs.value[0]?.value ?? '';
+});
+
+function onParameterTabSelected(key: string | number) {
+	if (typeof key !== 'string') return;
+	focusPanelStore.setActiveParameter(key);
+}
 
 const inputValue = ref<string>('');
 
@@ -329,11 +371,20 @@ function closeFocusPanel() {
 		(experimentalNdvStore.isNdvInFocusPanelEnabled || setupPanelStore.isFeatureEnabled) &&
 		resolvedParameter.value
 	) {
-		focusPanelStore.unsetParameters();
+		const removed = resolvedParameter.value;
+		focusPanelStore.removeFocusedNodeParameter(
+			getFocusedParameterKey(removed.nodeId, removed.parameterPath),
+		);
 
 		telemetry.track('User removed focused param', {
 			source: 'closeIcon',
-			parameters: focusPanelStore.focusedNodeParametersInTelemetryFormat,
+			parameters: [
+				{
+					parameterPath: removed.parameterPath,
+					nodeType: removed.node.type,
+					nodeId: removed.nodeId,
+				},
+			],
 		});
 
 		return;
@@ -444,6 +495,20 @@ function onRenameNode(value: string) {
 						@click="closeFocusPanel"
 					/>
 				</div>
+			</div>
+			<div
+				v-if="showParameterTabs"
+				:class="$style.parameterTabs"
+				data-test-id="focus-parameter-tabs"
+				role="group"
+				:aria-label="locale.baseText('nodeView.focusPanel.parameterTabs')"
+			>
+				<N8nTabs
+					:model-value="activeParameterTab"
+					:options="parameterTabs"
+					size="small"
+					@update:model-value="onParameterTabSelected"
+				/>
 			</div>
 			<div :class="$style.parameterDetailsWrapper">
 				<div :class="$style.parameterOptionsWrapper">
@@ -655,6 +720,10 @@ function onRenameNode(value: string) {
 				cursor: default !important;
 			}
 		}
+	}
+
+	.parameterTabs {
+		border-bottom: var(--border-width) solid var(--color--foreground);
 	}
 
 	.tabHeader {

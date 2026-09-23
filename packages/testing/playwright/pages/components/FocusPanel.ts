@@ -21,4 +21,8 @@ export class FocusPanel {
 		// find from the entire page because the mapper is rendered as portal
 		return this.root.page().getByRole('dialog').getByTestId('ndv-input-panel');
 	}
+
+	getParameterTabs(): Locator {
+		return this.root.getByTestId('focus-parameter-tabs');
+	}
 }

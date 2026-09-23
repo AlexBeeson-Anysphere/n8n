@@ -200,6 +200,25 @@ describe('FocusSidebar', () => {
 			const tabs = rendered.getByTestId('setup-panel-tabs');
 			expect(tabs).toHaveTextContent('N0');
 		});
+
+		it('should label the focus tab with the active parameter when several are focused', async () => {
+			const rendered = renderComponent({});
+
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter0,
+				parameterPath: 'parameters.p0',
+			});
+			focusPanelStore.openWithFocusedNodeParameter({
+				nodeId: 'n0',
+				parameter: parameter1,
+				parameterPath: 'parameters.p1',
+			});
+
+			expect(await rendered.findByTestId('focus-parameter')).toBeInTheDocument();
+			expect(rendered.queryByTestId('setup-panel-container')).not.toBeInTheDocument();
+			expect(rendered.getByTestId('setup-panel-tabs')).toHaveTextContent('P1');
+		});
 	});
 
 	describe('evaluations wizard sidepanel', () => {
